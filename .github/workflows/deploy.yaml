@@ -1,0 +1,31 @@
+name: Deploy to ArgoCD
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Build Docker image
+      run: |
+        docker build -t avokisol/demo-app:pr-${{ github.event.number }} .
+        docker push avokisol/demo-app:pr-${{ github.event.number }}
+
+    - name: Update Kubernetes manifests
+      run: |
+        sed -i "s|image: .*$|image: avokisol/demo-app:pr-${{ github.event.number }}|" deployment.yaml
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git commit -am "Update image tag to PR-${{ github.event.number }}"
+        git push
+
+    - name: Sync ArgoCD
+      run: |
+        argocd app sync demo-app --grpc-web
